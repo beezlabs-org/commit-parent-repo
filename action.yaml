@@ -1,0 +1,61 @@
+name: Commit Parent Repo
+description: Action to commit submodule changes to the parent repo
+inputs:
+  is-child:
+    description: Whether this repo is the child repo
+    required: false
+    default: "false"
+  is-parent:
+    description: Whether this repo is the parent repo
+    required: false
+    default: "false"
+  pat:
+    description: PAT for accessing the other repo
+    required: true
+  head-branch:
+    description: Name of the HEAD branch
+    required: false
+  parent-repo:
+    description: Name of the parent repo
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Trigger Parent Event
+      if: inputs.is-child == 'true'
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ inputs.pat }}
+        script: |
+          github.rest.actions.createWorkflowDispatch({
+            owner: 'beezlabs-org',
+            repo: '${{ inputs.parent-repo }}',
+            workflow_id: 'commit-parent-repo.yaml',
+            ref: '${{ inputs.head-branch }}'
+          })
+
+    - name: Checkout
+      if: inputs.is-parent == 'true'
+      uses: actions/checkout@v2
+      with:
+        token: ${{ inputs.pat }}
+        submodules: recursive
+
+    - name: Pull & update submodules recursively
+      if: inputs.is-parent == 'true'
+      run: |
+        git submodule update --init --recursive --remote
+      shell: bash
+    
+    - name: Commit Changes
+      if: inputs.is-parent == 'true'
+      env:
+        GIT_AUTHOR_NAME: Beez Innovation Labs
+        GIT_COMMITTER_NAME: Beez Innovation Labs
+        GIT_AUTHOR_EMAIL: github@beezlabs.com
+        GIT_COMMITTER_EMAIL: github@beezlabs.com
+      run: |
+        git add -A
+        git diff-index --quiet HEAD || git commit -m "feat: update submodules"
+        git push
+      shell: bash
